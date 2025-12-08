@@ -54,16 +54,8 @@ NOTIFY_CHAT_ID = os.getenv("NOTIFY_CHAT_ID")
 BASE_URL = "https://www.diarioficialdosmunicipios.org"
 EDICAO_ATUAL_URL = f"{BASE_URL}/edicao_atual.html"
 
-# Palavras-chave padrão
-DEFAULT_KEYWORDS = [
-    "Convita",
-    "mg gestão ambiental",
-    "Bioparque Zoobotânico",
-    "r m estrutura e pavimentação",
-    "Luiz Francisco do Rego Monteiro",
-    "Lumig",
-    "Molla"
-]
+# Palavras-chave padrão (vazio - usuário escolhe as suas)
+DEFAULT_KEYWORDS = []
 
 # Edição base conhecida (atualizar periodicamente ou usar busca automática)
 EDITION_BASE = 5462  # Edição de 04/12/2025
@@ -418,12 +410,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Registra usuário para notificações automáticas
     is_new = diario_bot.add_subscriber(chat_id)
     
-    # Inicializa palavras-chave padrão para o usuário
+    # Inicializa palavras-chave vazia para novo usuário
     if user_id not in diario_bot.user_keywords:
-        diario_bot.user_keywords[user_id] = DEFAULT_KEYWORDS.copy()
-        diario_bot.save_subscribers()  # Salva as palavras-chave também
+        diario_bot.user_keywords[user_id] = []
+        diario_bot.save_subscribers()
     
-    keywords_list = "\n".join([f"• {kw}" for kw in get_user_keywords(user_id)])
+    user_keywords = get_user_keywords(user_id)
+    
+    # Monta lista de palavras-chave ou mensagem de vazio
+    if user_keywords:
+        keywords_list = "\n".join([f"• {kw}" for kw in user_keywords])
+        keywords_section = f"\n*Suas palavras-chave atuais:*\n{keywords_list}"
+    else:
+        keywords_section = "\n*Você ainda não tem palavras-chave!*\nUse `/adicionar <palavra>` para adicionar suas palavras."
     
     # Mensagem de inscrição
     subscription_info = ""
@@ -445,14 +444,11 @@ Bem-vindo! Este bot pesquisa palavras-chave no Diário Oficial dos Municípios d
 /adicionar <palavra> - Adiciona uma palavra-chave
 /remover <palavra> - Remove uma palavra-chave
 /limpar - Remove todas as palavras-chave
-/resetar - Volta para palavras-chave padrão
 /pesquisar - Pesquisa suas palavras-chave na edição atual
 /buscar <termo> - Busca um termo específico (sem salvar)
 /cache - Limpa cache (para baixar nova edição)
 /desinscrever - Cancela notificações automáticas
-
-*Suas palavras-chave atuais:*
-{keywords_list}
+{keywords_section}
 
 ⏰ *Pesquisa automática:* Diariamente às 12:00
 👥 *Usuários inscritos:* {total_subscribers}{subscription_info}
@@ -595,16 +591,6 @@ async def clear_cache(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("📁 Cache já está vazio.")
 
 
-async def reset_keywords(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Comando /resetar - Volta para palavras-chave padrão."""
-    user_id = update.effective_user.id
-    diario_bot.user_keywords[user_id] = DEFAULT_KEYWORDS.copy()
-    
-    keywords_list = "\n".join([f"• {kw}" for kw in DEFAULT_KEYWORDS])
-    await update.message.reply_text(
-        f"✅ Palavras-chave resetadas para o padrão:\n\n{keywords_list}",
-        parse_mode="Markdown"
-    )
 
 
 async def search_keywords(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1224,7 +1210,6 @@ def main() -> None:
     application.add_handler(CommandHandler("remover", remove_keyword))
     application.add_handler(CommandHandler("limpar", clear_keywords))
     application.add_handler(CommandHandler("cache", clear_cache))
-    application.add_handler(CommandHandler("resetar", reset_keywords))
     application.add_handler(CommandHandler("pesquisar", search_keywords))
     application.add_handler(CommandHandler("buscar", quick_search))
     application.add_handler(CommandHandler("desinscrever", unsubscribe))
